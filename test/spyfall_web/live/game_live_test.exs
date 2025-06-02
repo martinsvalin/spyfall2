@@ -4,7 +4,7 @@ defmodule SpyfallWeb.GameLiveTest do
 
   describe "GameLive Presence" do
     test "two users joining the same game see each other", %{conn: conn_user1} do
-      game_id = "test-game-" <> Base.url_encode64(:crypto.strong_rand_bytes(4), padding: false)
+      game_id = random_game_id()
 
       # --- User 1 connects ---
       {:ok, view_user1, html_user1} = live(conn_user1, ~p"/games/#{game_id}")
@@ -57,5 +57,56 @@ defmodule SpyfallWeb.GameLiveTest do
     Regex.scan(~r/guest:\w+/, html_fragment)
     |> List.flatten()
     |> Enum.sort()
+  end
+
+  describe "A game round" do
+    test "three users join, start a game round, then ends it", %{conn: conn_user1} do
+      game_id = random_game_id()
+      conn_user2 = Phoenix.ConnTest.build_conn()
+      conn_user3 = Phoenix.ConnTest.build_conn()
+
+      {:ok, view_user1, _html_user1} = live(conn_user1, ~p"/games/#{game_id}")
+      {:ok, view_user2, _html_user2} = live(conn_user2, ~p"/games/#{game_id}")
+
+      # Start round button is disabled until at least three players are online
+      assert element(view_user1, ".button-disabled") |> render() =~ ~s(disabled="disabled")
+
+      {:ok, view_user3, _html_user3} = live(conn_user3, ~p"/games/#{game_id}")
+
+      # All users see each other
+      assert length(online_players(view_user1)) == 3
+      assert length(online_players(view_user2)) == 3
+      assert length(online_players(view_user3)) == 3
+      assert element(view_user1, "h3", "Waiting to Start Round") |> render()
+
+      # A player can start a game round
+      button = element(view_user1, ".button")
+      assert render(button) =~ "Deal Cards"
+      render_click(button)
+      assert element(view_user1, "h3", "Round in Progress!") |> render()
+
+      # one player is the spy, two players see the location
+      [{spy, 1}, {_location, 2}] =
+        [
+          element(view_user1, ".my-role strong"),
+          element(view_user2, ".my-role strong"),
+          element(view_user3, ".my-role strong")
+        ]
+        |> Enum.map(&render/1)
+        |> Enum.frequencies()
+        |> Enum.sort_by(fn {_, v} -> v end)
+
+      assert spy =~ "Spy!"
+
+      # a player can end the game round
+      button = element(view_user1, ".button")
+      assert render(button) =~ "End Round"
+      render_click(button)
+      assert element(view_user1, "h3", "Waiting to Start Round") |> render()
+    end
+  end
+
+  defp random_game_id() do
+    "test-game-" <> Base.url_encode64(:crypto.strong_rand_bytes(4), padding: false)
   end
 end
