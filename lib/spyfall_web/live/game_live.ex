@@ -12,6 +12,7 @@ defmodule SpyfallWeb.GameLive do
       |> assign(:page_title, "Spyfall Game")
       |> assign(:game_id, nil)
       |> assign(:my_guest_id, session["guest_id"])
+      |> assign(:my_name, nil)
       |> assign(:players, %{})
       |> assign(:game_round, nil)
 
@@ -22,16 +23,15 @@ defmodule SpyfallWeb.GameLive do
   def handle_params(%{"game_id" => game_id}, _url, socket) do
     GameSupervisor.ensure_game_started(game_id)
 
-    game_topic = "spyfall:game:" <> game_id
-
     user_meta = %{
       guest_id: socket.assigns.my_guest_id,
+      name: nil,
       online_at: DateTime.utc_now()
     }
 
     if connected?(socket) do
-      SpyfallWeb.Endpoint.subscribe(game_topic)
-      Presence.track(self(), game_topic, socket.assigns.my_guest_id, user_meta)
+      SpyfallWeb.Endpoint.subscribe(topic(game_id))
+      Presence.track(self(), topic(game_id), socket.assigns.my_guest_id, user_meta)
     end
 
     {
@@ -39,32 +39,22 @@ defmodule SpyfallWeb.GameLive do
       socket
       |> assign(:game_id, game_id)
       |> assign(:page_title, "Spyfall Game: " <> game_id)
-      |> assign(:players, online_players(game_topic))
+      |> assign(:players, online_players(topic(game_id)))
       |> assign(:game_round, client_visible(Game.round(game_id), socket.assigns.my_guest_id))
     }
   end
 
-  defp online_players(game_topic) do
-    Presence.list(game_topic)
-    |> presences_to_players()
-  end
-
-  defp presences_to_players(precenses) do
-    # Note: presences, such as from Phoenix.Presence.list, contain a map where keys
-    # are the tracked IDs (our guest_ids) and values are maps containing a :metas key
-    # with a list of metadata entries.
-    # Each guest_id has one meta entry, so we can simplify.
-    Map.new(precenses, fn {guest_id, %{metas: [meta | _]}} -> {guest_id, meta} end)
+  defp online_players(topic) do
+    Presence.list(topic)
+    |> Enum.map(fn {_guest_id, %{metas: [meta | _]}} -> meta end)
+    |> Enum.sort(fn %{online_at: a}, %{online_at: b} -> DateTime.compare(a, b) == :lt end)
   end
 
   @impl true
-  def handle_info(%{event: "presence_diff", payload: payload, topic: _topic}, socket) do
-    updated_players =
-      socket.assigns.players
-      |> Map.merge(presences_to_players(payload.joins))
-      |> Map.drop(Map.keys(payload.leaves))
+  def handle_info(%{event: "presence_diff", payload: payload, topic: topic}, socket) do
+    Logger.info("presence_diff, #{inspect(payload)}")
 
-    {:noreply, assign(socket, :players, updated_players)}
+    {:noreply, assign(socket, :players, online_players(topic))}
   end
 
   def handle_info(%{event: "round_started", payload: %{round: round}}, socket) do
@@ -78,25 +68,34 @@ defmodule SpyfallWeb.GameLive do
   defp client_visible(nil, _), do: nil
 
   defp client_visible(round, guest_id) do
-    case round.player_roles[guest_id] do
-      :spy ->
-        %{
-          role: :spy,
-          version: round.version
-        }
+    player_specific =
+      case round.player_roles[guest_id] do
+        :spy ->
+          %{
+            role: :spy
+          }
 
-      :player ->
-        %{
-          role: :player,
-          location: round.location,
-          version: round.version
-        }
-    end
+        :player ->
+          %{
+            role: :player,
+            location: round.location
+          }
+
+        nil ->
+          %{role: :joined_late}
+      end
+
+    Map.take(round, [:version, :started_at])
+    |> Map.merge(player_specific)
   end
 
   @impl true
   def handle_event("start_round", _value, socket) do
-    Game.start_round(socket.assigns.game_id, Map.keys(socket.assigns.players))
+    Game.start_round(
+      socket.assigns.game_id,
+      Enum.map(socket.assigns.players, &Map.get(&1, :guest_id))
+    )
+
     {:noreply, socket}
   end
 
@@ -105,17 +104,47 @@ defmodule SpyfallWeb.GameLive do
     {:noreply, socket}
   end
 
+  def handle_event("update_name", %{"name" => name}, socket) do
+    Presence.update(
+      self(),
+      topic(socket.assigns.game_id),
+      socket.assigns.my_guest_id,
+      &Map.put(&1, :name, name)
+    )
+
+    {:noreply, assign(socket, :my_name, name)}
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
     <h1>Spyfall Game: {@game_id}</h1>
-    <p>Welcome, Guest {@my_guest_id}!</p>
     <p>Share this page's URL with your friends to have them join the game!</p>
 
-    <h2>Players Online ({map_size(@players)}):</h2>
+    <%= if @my_name do %>
+      <h2 id="greeting">Welcome, {@my_name}!</h2>
+    <% else %>
+      <h2 id="greeting">Welcome, guest! I'll call you {@my_guest_id}</h2>
+    <% end %>
+
+    <form phx-change="update_name" phx-debounce="300">
+      <input
+        type="text"
+        name="name"
+        value={@my_name}
+        placeholder="Enter your name"
+        id="name-input"
+        phx-hook="NamePersister"
+      />
+    </form>
+
+    <h2>Players Online ({length(@players)}):</h2>
     <ul id="player-list">
-      <li :for={{guest_id, player_meta} <- @players}>
-        Guest {guest_id} (joined at {player_meta.online_at})
+      <li :for={player_meta <- @players}>
+        {player_meta.name || "Guest " <> player_meta.guest_id} (joined at {Calendar.strftime(
+          player_meta.online_at,
+          "%H:%M:%S"
+        )})
       </li>
     </ul>
 
@@ -125,12 +154,16 @@ defmodule SpyfallWeb.GameLive do
       <h3>Round in Progress!</h3>
       <div class="my-role">
         <h4>Your Role:</h4>
-        <%= if @game_round.role == :spy do %>
-          <p>You are the <strong>Spy!</strong></p>
-          <p>Try to figure out the location without revealing you're the spy.</p>
-        <% else %>
-          <p>Location: <strong>{@game_round.location}</strong></p>
-          <p>You are a regular player. Try to identify the spy.</p>
+        <%= case @game_round.role do %>
+          <% :spy -> %>
+            <p>You are the <strong>Spy!</strong></p>
+            <p>Try to figure out the location without revealing you're the spy.</p>
+          <% :player -> %>
+            <p>Location: <strong>{@game_round.location}</strong></p>
+            <p>You are a regular player. Try to identify the spy.</p>
+          <% :joined_late -> %>
+            <p>You're not in this round</p>
+            <p>Wait for the next game round to start. They're usually not long.</p>
         <% end %>
       </div>
 
@@ -143,7 +176,7 @@ defmodule SpyfallWeb.GameLive do
     <% else %>
       <h3>Waiting to Start Round</h3>
       <p>Gather your friends! When ready, someone can deal the cards.</p>
-      <%= if map_size(@players) >= 3 do %>
+      <%= if length(@players) >= 3 do %>
         <button phx-click="start_round" class="button">Deal Cards & Start Round</button>
       <% else %>
         <p>Need at least 3 players to start.</p>
@@ -156,4 +189,6 @@ defmodule SpyfallWeb.GameLive do
     <p><.link href={~p"/"}>Back to Lobby</.link></p>
     """
   end
+
+  defp topic(game_id), do: "spyfall:game:" <> game_id
 end

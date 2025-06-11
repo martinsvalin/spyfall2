@@ -11,11 +11,12 @@ defmodule SpyfallWeb.GameLiveTest do
 
       # Extract User 1's guest ID from their view
       # Assuming your HTML includes: <p>Your Guest ID: guest:xxxx</p>
-      assert html_user1 =~ "Welcome, Guest", "No welcome message in initial HTML for User 1"
+      assert html_user1 =~ "Welcome, guest", "No welcome message in initial HTML for User 1"
       assert html_user1 =~ "Players Online (1)", "Presence should list one online for user 1"
 
-      [guest_id_user1] =
-        Regex.run(~r/Welcome, Guest (guest:\w+)!/, html_user1, capture: :all_but_first)
+      greeting_user1 = element(view_user1, "#greeting") |> render()
+      assert greeting_user1 =~ ~r/guest:\w+/
+      [guest_id_user1] = Regex.run(~r/guest:\w+/, greeting_user1)
 
       refute is_nil(guest_id_user1), "Failed to extract User 1's guest ID. HTML: #{html_user1}"
       assert online_players(view_user1) == [guest_id_user1]
@@ -25,11 +26,12 @@ defmodule SpyfallWeb.GameLiveTest do
 
       {:ok, view_user2, html_user2} = live(conn_user2, ~p"/games/#{game_id}")
 
-      assert html_user2 =~ "Welcome, Guest", "No welcome message in initial HTML for User 2"
+      assert html_user2 =~ "Welcome, guest", "No welcome message in initial HTML for User 2"
       assert html_user2 =~ "Players Online (2)", "Presence should list two online for user 2"
 
-      [guest_id_user2] =
-        Regex.run(~r/Welcome, Guest (guest:\w+)!/, html_user2, capture: :all_but_first)
+      greeting_user2 = element(view_user2, "#greeting") |> render()
+      assert greeting_user2 =~ ~r/guest:\w+/
+      [guest_id_user2] = Regex.run(~r/guest:\w+/, greeting_user2)
 
       refute is_nil(guest_id_user2), "Failed to extract User 2's guest ID. HTML: #{html_user2}"
       assert guest_id_user1 != guest_id_user2
