@@ -14,7 +14,7 @@ permissions:
   id-token: "write"
 
 jobs:
-  deploy:
+  build-and-publish-image:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -36,6 +36,10 @@ jobs:
           docker build -t ${{ env.IMAGE }}:${{ github.sha }} .
           docker push ${{ env.IMAGE }}:${{ github.sha }}
 
+  deploy-to-cloudrun:
+    runs-on: ubuntu-latest
+    needs: build-and-publish-image
+    steps:
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
