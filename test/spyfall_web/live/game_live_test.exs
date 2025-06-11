@@ -15,8 +15,8 @@ defmodule SpyfallWeb.GameLiveTest do
       assert html_user1 =~ "Players Online (1)", "Presence should list one online for user 1"
 
       greeting_user1 = element(view_user1, "#greeting") |> render()
-      assert greeting_user1 =~ ~r/guest:\w+/
-      [guest_id_user1] = Regex.run(~r/guest:\w+/, greeting_user1)
+      assert greeting_user1 =~ ~r/guest:[\w-]+/
+      [guest_id_user1] = Regex.run(~r/guest:[\w-]+/, greeting_user1)
 
       refute is_nil(guest_id_user1), "Failed to extract User 1's guest ID. HTML: #{html_user1}"
       assert online_players(view_user1) == [guest_id_user1]
@@ -30,8 +30,8 @@ defmodule SpyfallWeb.GameLiveTest do
       assert html_user2 =~ "Players Online (2)", "Presence should list two online for user 2"
 
       greeting_user2 = element(view_user2, "#greeting") |> render()
-      assert greeting_user2 =~ ~r/guest:\w+/
-      [guest_id_user2] = Regex.run(~r/guest:\w+/, greeting_user2)
+      assert greeting_user2 =~ ~r/guest:[\w-]+/
+      [guest_id_user2] = Regex.run(~r/guest:[\w-]+/, greeting_user2)
 
       refute is_nil(guest_id_user2), "Failed to extract User 2's guest ID. HTML: #{html_user2}"
       assert guest_id_user1 != guest_id_user2
@@ -56,7 +56,7 @@ defmodule SpyfallWeb.GameLiveTest do
   defp online_players(view) do
     html_fragment = element(view, "#player-list") |> render()
 
-    Regex.scan(~r/guest:\w+/, html_fragment)
+    Regex.scan(~r/guest:[\w-]+/, html_fragment)
     |> List.flatten()
     |> Enum.sort()
   end
