@@ -33,12 +33,12 @@ jobs:
 
       - name: Build and push Docker image to Artifact Registry
         run: |
-          docker build -t ${IMAGE}:${{ github.sha }} .
-          docker push ${IMAGE}:${{ github.sha }}
+          docker build -t ${{ env.IMAGE }}:${{ github.sha }} .
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: spyfall
           region: ${{ vars.GCP_REGION }}
-          image: ${IMAGE}:${{ github.sha }}
+          image: ${{ env.IMAGE }}:${{ github.sha }}
