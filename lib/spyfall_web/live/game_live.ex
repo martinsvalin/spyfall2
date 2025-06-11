@@ -126,7 +126,14 @@ defmodule SpyfallWeb.GameLive do
     <% end %>
 
     <form phx-submit="update_name" phx-debounce="300">
-      <input type="text" name="name" value={@my_name} placeholder="Enter your name" id="name-input" />
+      <input
+        type="text"
+        name="name"
+        value={@my_name}
+        placeholder="Enter your name"
+        id="name-input"
+        phx-hook="NamePersister"
+      />
     </form>
 
     <h2>Players Online ({length(@players)}):</h2>
