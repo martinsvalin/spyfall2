@@ -32,6 +32,7 @@ defmodule Spyfall.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:logger_json, "~> 7.0"},
       {:phoenix, "~> 1.7.21"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
