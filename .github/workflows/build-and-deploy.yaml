@@ -1,0 +1,44 @@
+name: Build, push and deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/docker/spyfall
+
+permissions:
+  contents: "read"
+  id-token: "write"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          create_credentials_file: true
+          service_account: github-actions-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMERIC_ID }}/locations/global/workloadIdentityPools/spyfall-wif-pool/providers/github-actions
+
+      - name: Configure Docker to use Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build and push Docker image to Artifact Registry
+        run: |
+          docker build -t ${IMAGE}:${{ github.sha }} .
+          docker push ${IMAGE}:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: spyfall
+          region: ${{ vars.GCP_REGION }}
+          image: ${IMAGE}:${{ github.sha }}
