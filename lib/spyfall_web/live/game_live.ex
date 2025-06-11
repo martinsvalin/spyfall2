@@ -152,6 +152,10 @@ defmodule SpyfallWeb.GameLive do
 
     <%= if @game_round do %>
       <h3>Round in Progress!</h3>
+      Game round time:
+      <span id="game-time" phx-hook="GameTimer" data-started-at={@game_round.started_at}>
+        0:00
+      </span>
       <div class="my-role">
         <h4>Your Role:</h4>
         <%= case @game_round.role do %>

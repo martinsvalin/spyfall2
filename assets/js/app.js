@@ -24,6 +24,57 @@ import topbar from "../vendor/topbar";
 
 let Hooks = {};
 
+Hooks.GameTimer = {
+  mounted() {
+    this.startTime = null;
+    this.timerId = null;
+    this.initializeTimer();
+  },
+
+  updated() {
+    this.initializeTimer();
+  },
+
+  destroyed() {
+    this.clearExistingTimer();
+  },
+
+  initializeTimer() {
+    this.clearExistingTimer();
+
+    const startedAtISO = this.el.dataset.startedAt;
+    this.startTime = new Date(startedAtISO);
+
+    this.updateDisplay();
+    this.timerId = setInterval(() => {
+      this.updateDisplay();
+    }, 1000);
+  },
+
+  clearExistingTimer() {
+    if (this.timerId) {
+      clearInterval(this.timerId);
+      this.timerId = null;
+    }
+  },
+
+  updateDisplay() {
+    const now = new Date();
+    const elapsedMilliseconds = now.getTime() - this.startTime.getTime();
+
+    if (elapsedMilliseconds < 0) {
+      return;
+    }
+
+    const totalElapsedSeconds = Math.floor(elapsedMilliseconds / 1000);
+    const minutes = Math.floor(totalElapsedSeconds / 60);
+    const seconds = totalElapsedSeconds % 60;
+    const paddedSeconds = seconds < 10 ? `0${seconds}` : `${seconds}`;
+
+    this.el.innerText = `${minutes}:${paddedSeconds}`;
+  },
+};
+
 Hooks.NamePersister = {
   mounted() {
     const input = this.el;
