@@ -125,15 +125,8 @@ defmodule SpyfallWeb.GameLive do
       <h2 id="greeting">Welcome, guest! I'll call you {@my_guest_id}</h2>
     <% end %>
 
-    <form phx-change="update_name" phx-debounce="300">
-      <input
-        type="text"
-        name="name"
-        value={@my_name}
-        placeholder="Enter your name"
-        id="name-input"
-        phx-hook="NamePersister"
-      />
+    <form phx-submit="update_name" phx-debounce="300">
+      <input type="text" name="name" value={@my_name} placeholder="Enter your name" id="name-input" />
     </form>
 
     <h2>Players Online ({length(@players)}):</h2>
