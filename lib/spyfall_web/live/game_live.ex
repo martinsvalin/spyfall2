@@ -52,8 +52,6 @@ defmodule SpyfallWeb.GameLive do
 
   @impl true
   def handle_info(%{event: "presence_diff", payload: payload, topic: topic}, socket) do
-    Logger.info("presence_diff, #{inspect(payload)}")
-
     {:noreply, assign(socket, :players, online_players(topic))}
   end
 
