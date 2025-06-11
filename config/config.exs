@@ -12,7 +12,6 @@ config :spyfall,
 
 # Configures the endpoint
 config :spyfall, SpyfallWeb.Endpoint,
-  url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [html: SpyfallWeb.ErrorHTML, json: SpyfallWeb.ErrorJSON],
